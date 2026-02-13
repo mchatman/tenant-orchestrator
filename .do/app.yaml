@@ -1,0 +1,17 @@
+name: tenant-orchestrator
+region: nyc3
+
+services:
+- name: tenant-orchestrator
+  git:
+    branch: main
+    repo_clone_url: https://github.com/mchatman/tenant-orchestrator.git
+  run_command: ./tenant-orchestrator
+  dockerfile_path: Dockerfile
+  instance_count: 1
+  instance_size_slug: basic-xs
+  http_port: 8080
+
+  envs:
+  - key: PORT
+    value: "8080"
