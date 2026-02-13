@@ -3,8 +3,10 @@ package k8s
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -46,7 +48,21 @@ func NewManager(namespace string) (*Manager, error) {
 }
 
 func getConfig() (*rest.Config, error) {
-	// Try in-cluster config first (for when running in K8s)
+	// Try KUBECONFIG_BASE64 environment variable first (for App Platform)
+	if kubeconfigBase64 := os.Getenv("KUBECONFIG_BASE64"); kubeconfigBase64 != "" {
+		kubeconfigBytes, err := base64.StdEncoding.DecodeString(kubeconfigBase64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode KUBECONFIG_BASE64: %v", err)
+		}
+
+		config, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse kubeconfig: %v", err)
+		}
+		return config, nil
+	}
+
+	// Try in-cluster config (for when running in K8s)
 	config, err := rest.InClusterConfig()
 	if err == nil {
 		return config, nil
