@@ -92,7 +92,7 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 	// Create OpenClawInstance CRD
 	instance := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "openclaw.openclaw.io/v1alpha1",
+			"apiVersion": "openclaw.rocks/v1alpha1",
 			"kind":       "OpenClawInstance",
 			"metadata": map[string]interface{}{
 				"name":      instanceName,
