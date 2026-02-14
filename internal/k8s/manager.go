@@ -115,12 +115,12 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 				},
 				"resources": map[string]interface{}{
 					"requests": map[string]interface{}{
-						"memory": "1Gi",
-						"cpu":    "250m",
+						"memory": "512Mi",
+						"cpu":    "100m",
 					},
 					"limits": map[string]interface{}{
-						"memory": "2Gi",
-						"cpu":    "500m",
+						"memory": "1536Mi",
+						"cpu":    "1000m",
 					},
 				},
 				"probes": map[string]interface{}{
@@ -158,20 +158,13 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 		return "", fmt.Errorf("failed to create tenant instance: %v", err)
 	}
 
-	// Create Ingress entry for this tenant
-	err = m.createIngress(ctx, instanceName)
-	if err != nil {
-		// Log but don't fail - the instance is created, ingress can be added later
-		fmt.Printf("Warning: failed to create ingress for %s: %v\n", instanceName, err)
-	}
-
-	// Return the instance name (which will be used as the endpoint)
+	// The operator creates Ingress + TLS automatically via the CRD.
 	return instanceName, nil
 }
 
 // GetInstanceEndpoint returns the external endpoint for a tenant's instance
 func (m *Manager) GetInstanceEndpoint(instanceName string) string {
-	return fmt.Sprintf("http://%s.wareit.ai", instanceName)
+	return fmt.Sprintf("https://%s.wareit.ai", instanceName)
 }
 
 // GetInstanceStatus checks if an instance is running by tenant ID
@@ -196,7 +189,7 @@ func (m *Manager) GetInstanceStatus(ctx context.Context, tenantID string) (strin
 	}
 
 	switch status {
-	case "Ready":
+	case "Running":
 		return "running", nil
 	case "Failed":
 		return "error", nil
@@ -239,16 +232,3 @@ func (m *Manager) StartInstance(ctx context.Context, tenantID string) error {
 	return fmt.Errorf("StartInstance not supported - use CreateInstance instead")
 }
 
-var ingressGVR = schema.GroupVersionResource{
-	Group:    "networking.k8s.io",
-	Version:  "v1",
-	Resource: "ingresses",
-}
-
-// createIngress creates an ingress entry for a tenant instance
-func (m *Manager) createIngress(ctx context.Context, instanceName string) error {
-	// For now, just log that we would create the ingress
-	// The actual implementation can be done later or manually
-	fmt.Printf("Would create ingress for %s at %s.wareit.ai\n", instanceName, instanceName)
-	return nil
-}

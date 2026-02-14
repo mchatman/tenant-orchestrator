@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 
@@ -126,17 +128,11 @@ func (h *Handler) StopInstance(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// generateToken creates a random gateway token
+// generateToken creates a cryptographically random gateway token.
 func generateToken() string {
-	// Simple token generation - should use crypto/rand in production
-	return "token-" + randString(32)
-}
-
-func randString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[i%len(letters)] // Simplified - use crypto/rand in production
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand failed: " + err.Error())
 	}
-	return string(b)
+	return hex.EncodeToString(b)
 }
