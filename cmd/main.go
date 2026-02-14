@@ -16,7 +16,7 @@ func main() {
 	// Get namespace from env or use default
 	namespace := os.Getenv("NAMESPACE")
 	if namespace == "" {
-		namespace = "openclaw-tenants"
+		namespace = "tenants"
 	}
 
 	// Initialize K8s manager
