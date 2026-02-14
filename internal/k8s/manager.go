@@ -162,40 +162,57 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 	return instanceName, nil
 }
 
+// InstanceInfo holds the name and status of a tenant's instance.
+type InstanceInfo struct {
+	Name   string
+	Status string
+}
+
 // GetInstanceEndpoint returns the external endpoint for a tenant's instance
 func (m *Manager) GetInstanceEndpoint(instanceName string) string {
 	return fmt.Sprintf("https://%s.wareit.ai", instanceName)
 }
 
-// GetInstanceStatus checks if an instance is running by tenant ID
-func (m *Manager) GetInstanceStatus(ctx context.Context, tenantID string) (string, error) {
-	// Find instance by tenant label
+// GetInstance finds a tenant's instance and returns its name and status.
+func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceInfo, error) {
 	list, err := m.client.Resource(tenantGVR).Namespace(m.namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("tenant=%s", tenantID),
 	})
 	if err != nil {
-		return "", fmt.Errorf("listing instances: %v", err)
+		return nil, fmt.Errorf("listing instances: %v", err)
 	}
 
 	if len(list.Items) == 0 {
+		return nil, nil
+	}
+
+	instance := list.Items[0]
+	name := instance.GetName()
+
+	phase, found, _ := unstructured.NestedString(instance.Object, "status", "phase")
+	status := "starting"
+	if found {
+		switch phase {
+		case "Running":
+			status = "running"
+		case "Failed":
+			status = "error"
+		}
+	}
+
+	return &InstanceInfo{Name: name, Status: status}, nil
+}
+
+// GetInstanceStatus checks if an instance is running by tenant ID (deprecated: use GetInstance)
+func (m *Manager) GetInstanceStatus(ctx context.Context, tenantID string) (string, error) {
+	info, err := m.GetInstance(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	if info == nil {
 		return "not_found", nil
 	}
-
-	// Check the status of the first matching instance
-	instance := list.Items[0]
-	status, found, _ := unstructured.NestedString(instance.Object, "status", "phase")
-	if !found {
-		return "starting", nil // No status yet means it's starting
-	}
-
-	switch status {
-	case "Running":
-		return "running", nil
-	case "Failed":
-		return "error", nil
-	default:
-		return "starting", nil
-	}
+	return info.Status, nil
 }
 
 // DeleteInstance deletes a tenant's instance

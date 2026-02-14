@@ -57,20 +57,20 @@ func (h *Handler) CreateInstance(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetInstance(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "tenant-id")
 
-	status, err := h.k8sManager.GetInstanceStatus(r.Context(), tenantID)
+	info, err := h.k8sManager.GetInstance(r.Context(), tenantID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if status == "not_found" {
+	if info == nil {
 		http.Error(w, "Instance not found", http.StatusNotFound)
 		return
 	}
 
 	resp := InstanceResponse{
-		Endpoint: h.k8sManager.GetInstanceEndpoint(tenantID),
-		Status:   status,
+		Endpoint: info.Name,
+		Status:   info.Status,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
