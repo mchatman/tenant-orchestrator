@@ -25,7 +25,7 @@ type Manager struct {
 }
 
 var tenantGVR = schema.GroupVersionResource{
-	Group:    "openclaw.openclaw.io",
+	Group:    "openclaw.rocks",
 	Version:  "v1alpha1",
 	Resource: "openclawinstances",
 }
