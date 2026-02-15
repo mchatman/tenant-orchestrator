@@ -151,14 +151,22 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						"enabled":   true,
 						"className": "nginx",
 						"annotations": map[string]interface{}{
-							"cert-manager.io/cluster-issuer":                    "letsencrypt-prod",
-							"nginx.ingress.kubernetes.io/proxy-body-size":       "50m",
-							"nginx.ingress.kubernetes.io/proxy-read-timeout":    "3600",
-							"nginx.ingress.kubernetes.io/proxy-send-timeout":    "3600",
+							"cert-manager.io/cluster-issuer":                          "letsencrypt-prod",
+							"nginx.ingress.kubernetes.io/proxy-body-size":             "50m",
+							"nginx.ingress.kubernetes.io/proxy-read-timeout":          "3600",
+							"nginx.ingress.kubernetes.io/proxy-send-timeout":          "3600",
+							"nginx.ingress.kubernetes.io/ssl-redirect":                "false",
+							"nginx.ingress.kubernetes.io/force-ssl-redirect":          "false",
 						},
 						"hosts": []map[string]interface{}{
 							{
 								"host": fmt.Sprintf("%s.wareit.ai", instanceName),
+								"paths": []map[string]interface{}{
+									{"path": "/", "pathType": "Prefix"},
+								},
+							},
+							{
+								"host": fmt.Sprintf("%s.internal.wareit.ai", instanceName),
 								"paths": []map[string]interface{}{
 									{"path": "/", "pathType": "Prefix"},
 								},
@@ -172,7 +180,7 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						},
 						"security": map[string]interface{}{
 							"enableHSTS":  false,
-							"forceHTTPS": true,
+							"forceHTTPS": false,
 						},
 					},
 				},
