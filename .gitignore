@@ -1,0 +1,3 @@
+kubeconfig-sa.yaml
+*.exe
+vendor/

@@ -1,3 +1,5 @@
+// Package k8s provides a thin wrapper around the Kubernetes dynamic client for
+// managing OpenClaw tenant instances.
 package k8s
 
 import (
@@ -8,6 +10,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+
+	"github.com/mchatman/tenant-orchestrator/internal/config"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,9 +24,14 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+// uuidRe matches a standard UUID (v4 or otherwise).
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// Manager provides high-level operations on OpenClaw tenant instances inside a
+// single Kubernetes namespace.
 type Manager struct {
-	client    dynamic.Interface
-	namespace string
+	client dynamic.Interface
+	cfg    *config.Config
 }
 
 var tenantGVR = schema.GroupVersionResource{
@@ -30,20 +40,21 @@ var tenantGVR = schema.GroupVersionResource{
 	Resource: "openclawinstances",
 }
 
-func NewManager(namespace string) (*Manager, error) {
-	config, err := getConfig()
+// NewManager creates a Manager that operates in the namespace specified by cfg.
+func NewManager(cfg *config.Config) (*Manager, error) {
+	restCfg, err := getConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get k8s config: %v", err)
 	}
 
-	client, err := dynamic.NewForConfig(config)
+	client, err := dynamic.NewForConfig(restCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create k8s client: %v", err)
 	}
 
 	return &Manager{
-		client:    client,
-		namespace: namespace,
+		client: client,
+		cfg:    cfg,
 	}, nil
 }
 
@@ -55,17 +66,17 @@ func getConfig() (*rest.Config, error) {
 			return nil, fmt.Errorf("failed to decode KUBECONFIG_BASE64: %v", err)
 		}
 
-		config, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes)
+		cfg, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse kubeconfig: %v", err)
 		}
-		return config, nil
+		return cfg, nil
 	}
 
 	// Try in-cluster config (for when running in K8s)
-	config, err := rest.InClusterConfig()
+	cfg, err := rest.InClusterConfig()
 	if err == nil {
-		return config, nil
+		return cfg, nil
 	}
 
 	// Fall back to kubeconfig file (for local development)
@@ -73,9 +84,17 @@ func getConfig() (*rest.Config, error) {
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }
 
+// ValidateTenantID returns an error if tenantID is not a valid UUID.
+func ValidateTenantID(tenantID string) error {
+	if !uuidRe.MatchString(tenantID) {
+		return fmt.Errorf("invalid tenant ID: must be a valid UUID")
+	}
+	return nil
+}
+
 // buildEnvVars constructs the env var list for a new tenant instance.
 // It injects shared API keys from the orchestrator's own environment.
-func (m *Manager) buildEnvVars(gatewayToken string) []map[string]interface{} {
+func buildEnvVars(gatewayToken string) []map[string]interface{} {
 	envs := []map[string]interface{}{
 		{"name": "OPENCLAW_GATEWAY_TOKEN", "value": gatewayToken},
 		{"name": "NODE_ENV", "value": "production"},
@@ -94,7 +113,7 @@ func (m *Manager) buildEnvVars(gatewayToken string) []map[string]interface{} {
 	return envs
 }
 
-func (m *Manager) generateTenantInstanceName() (string, error) {
+func generateTenantInstanceName() (string, error) {
 	bytes := make([]byte, 4)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
@@ -102,22 +121,19 @@ func (m *Manager) generateTenantInstanceName() (string, error) {
 	return fmt.Sprintf("tenant-%s", hex.EncodeToString(bytes)), nil
 }
 
-// CreateInstance creates a new instance for a tenant
-func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken string) (string, error) {
-	// Generate a unique instance name
-	instanceName, err := m.generateTenantInstanceName()
-	if err != nil {
-		return "", fmt.Errorf("generating instance name: %v", err)
-	}
+// buildInstanceSpec constructs the full OpenClawInstance CRD object ready for
+// creation in the cluster.
+func (m *Manager) buildInstanceSpec(instanceName, tenantID, gatewayToken string) *unstructured.Unstructured {
+	domain := m.cfg.Domain
+	internalDomain := m.cfg.InternalDomain
 
-	// Create OpenClawInstance CRD
-	instance := &unstructured.Unstructured{
+	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "openclaw.rocks/v1alpha1",
 			"kind":       "OpenClawInstance",
 			"metadata": map[string]interface{}{
 				"name":      instanceName,
-				"namespace": m.namespace,
+				"namespace": m.cfg.Namespace,
 				"labels": map[string]interface{}{
 					"tenant": tenantID,
 					"app":    "tenant-instance",
@@ -137,9 +153,6 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						"gateway": map[string]interface{}{
 							"bind": "lan",
 							"mode": "local",
-							// Trust nginx ingress + k8s pod network so connections
-							// through the proxy are treated as local (required for
-							// dangerouslyDisableDeviceAuth to work).
 							"trustedProxies": []string{
 								"10.0.0.0/8",
 								"172.16.0.0/12",
@@ -147,33 +160,33 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 							},
 							"controlUi": map[string]interface{}{
 								"allowInsecureAuth": true,
-								"allowedOrigins":    []string{"https://dashboard.wareit.ai"},
+								"allowedOrigins":    []string{fmt.Sprintf("https://dashboard.%s", domain)},
 							},
 						},
 					},
 				},
-				"env": m.buildEnvVars(gatewayToken),
+				"env": buildEnvVars(gatewayToken),
 				"networking": map[string]interface{}{
 					"ingress": map[string]interface{}{
 						"enabled":   true,
 						"className": "nginx",
 						"annotations": map[string]interface{}{
-							"cert-manager.io/cluster-issuer":                          "letsencrypt-prod",
-							"nginx.ingress.kubernetes.io/proxy-body-size":             "50m",
-							"nginx.ingress.kubernetes.io/proxy-read-timeout":          "3600",
-							"nginx.ingress.kubernetes.io/proxy-send-timeout":          "3600",
-							"nginx.ingress.kubernetes.io/ssl-redirect":                "false",
-							"nginx.ingress.kubernetes.io/force-ssl-redirect":          "false",
+							"cert-manager.io/cluster-issuer":                 "letsencrypt-prod",
+							"nginx.ingress.kubernetes.io/proxy-body-size":    "50m",
+							"nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
+							"nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+							"nginx.ingress.kubernetes.io/ssl-redirect":       "false",
+							"nginx.ingress.kubernetes.io/force-ssl-redirect": "false",
 						},
 						"hosts": []map[string]interface{}{
 							{
-								"host": fmt.Sprintf("%s.wareit.ai", instanceName),
+								"host": fmt.Sprintf("%s.%s", instanceName, domain),
 								"paths": []map[string]interface{}{
 									{"path": "/", "pathType": "Prefix"},
 								},
 							},
 							{
-								"host": fmt.Sprintf("%s.internal.wareit.ai", instanceName),
+								"host": fmt.Sprintf("%s.%s", instanceName, internalDomain),
 								"paths": []map[string]interface{}{
 									{"path": "/", "pathType": "Prefix"},
 								},
@@ -181,12 +194,12 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						},
 						"tls": []map[string]interface{}{
 							{
-								"hosts":      []string{fmt.Sprintf("%s.wareit.ai", instanceName)},
+								"hosts":      []string{fmt.Sprintf("%s.%s", instanceName, domain)},
 								"secretName": fmt.Sprintf("%s-tls", instanceName),
 							},
 						},
 						"security": map[string]interface{}{
-							"enableHSTS":  false,
+							"enableHSTS": false,
 							"forceHTTPS": false,
 						},
 					},
@@ -215,31 +228,51 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 			},
 		},
 	}
+}
 
-	_, err = m.client.Resource(tenantGVR).Namespace(m.namespace).Create(ctx, instance, metav1.CreateOptions{})
+// CreateInstance provisions a new OpenClaw instance for the given tenant and
+// returns its public endpoint URL.
+func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken string) (string, error) {
+	if err := ValidateTenantID(tenantID); err != nil {
+		return "", err
+	}
+
+	instanceName, err := generateTenantInstanceName()
+	if err != nil {
+		return "", fmt.Errorf("generating instance name: %v", err)
+	}
+
+	instance := m.buildInstanceSpec(instanceName, tenantID, gatewayToken)
+
+	_, err = m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).Create(ctx, instance, metav1.CreateOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to create tenant instance: %v", err)
 	}
 
-	// The operator creates Ingress + TLS automatically via the CRD.
-	return instanceName, nil
+	return m.InstanceURL(instanceName), nil
 }
 
-// InstanceInfo holds the name, status, and gateway token of a tenant's instance.
+// InstanceInfo holds metadata about a running tenant instance.
 type InstanceInfo struct {
-	Name         string
-	Status       string
-	GatewayToken string
+	Name         string // Kubernetes resource name (e.g. "tenant-ab12cd34")
+	Endpoint     string // Public URL (e.g. "https://tenant-ab12cd34.wareit.ai")
+	Status       string // Simplified status: "starting", "running", or "error"
+	GatewayToken string // The OPENCLAW_GATEWAY_TOKEN injected at creation time
 }
 
-// GetInstanceEndpoint returns the external endpoint for a tenant's instance
-func (m *Manager) GetInstanceEndpoint(instanceName string) string {
-	return fmt.Sprintf("https://%s.wareit.ai", instanceName)
+// InstanceURL returns the public HTTPS URL for the given instance name.
+func (m *Manager) InstanceURL(instanceName string) string {
+	return fmt.Sprintf("https://%s.%s", instanceName, m.cfg.Domain)
 }
 
-// GetInstance finds a tenant's instance and returns its name and status.
+// GetInstance finds a tenant's instance and returns its info, or nil if none
+// exists.
 func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceInfo, error) {
-	list, err := m.client.Resource(tenantGVR).Namespace(m.namespace).List(ctx, metav1.ListOptions{
+	if err := ValidateTenantID(tenantID); err != nil {
+		return nil, err
+	}
+
+	list, err := m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("tenant=%s", tenantID),
 	})
 	if err != nil {
@@ -250,10 +283,10 @@ func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceIn
 		return nil, nil
 	}
 
-	instance := list.Items[0]
-	name := instance.GetName()
+	item := list.Items[0]
+	name := item.GetName()
 
-	phase, found, _ := unstructured.NestedString(instance.Object, "status", "phase")
+	phase, found, _ := unstructured.NestedString(item.Object, "status", "phase")
 	status := "starting"
 	if found {
 		switch phase {
@@ -266,7 +299,7 @@ func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceIn
 
 	// Extract gateway token from env vars
 	var gatewayToken string
-	envVars, _, _ := unstructured.NestedSlice(instance.Object, "spec", "env")
+	envVars, _, _ := unstructured.NestedSlice(item.Object, "spec", "env")
 	for _, e := range envVars {
 		if envMap, ok := e.(map[string]interface{}); ok {
 			if envMap["name"] == "OPENCLAW_GATEWAY_TOKEN" {
@@ -276,34 +309,29 @@ func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceIn
 		}
 	}
 
-	return &InstanceInfo{Name: name, Status: status, GatewayToken: gatewayToken}, nil
+	return &InstanceInfo{
+		Name:         name,
+		Endpoint:     m.InstanceURL(name),
+		Status:       status,
+		GatewayToken: gatewayToken,
+	}, nil
 }
 
-// GetInstanceStatus checks if an instance is running by tenant ID (deprecated: use GetInstance)
-func (m *Manager) GetInstanceStatus(ctx context.Context, tenantID string) (string, error) {
-	info, err := m.GetInstance(ctx, tenantID)
-	if err != nil {
-		return "", err
-	}
-	if info == nil {
-		return "not_found", nil
-	}
-	return info.Status, nil
-}
-
-// DeleteInstance deletes a tenant's instance
+// DeleteInstance deletes all instances belonging to the given tenant.
 func (m *Manager) DeleteInstance(ctx context.Context, tenantID string) error {
-	// Find instance by tenant label
-	list, err := m.client.Resource(tenantGVR).Namespace(m.namespace).List(ctx, metav1.ListOptions{
+	if err := ValidateTenantID(tenantID); err != nil {
+		return err
+	}
+
+	list, err := m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("tenant=%s", tenantID),
 	})
 	if err != nil {
 		return fmt.Errorf("listing instances for deletion: %v", err)
 	}
 
-	// Delete all instances for this tenant
 	for _, instance := range list.Items {
-		err = m.client.Resource(tenantGVR).Namespace(m.namespace).Delete(
+		err = m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).Delete(
 			ctx, instance.GetName(), metav1.DeleteOptions{})
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete tenant instance %s: %v", instance.GetName(), err)
@@ -313,15 +341,14 @@ func (m *Manager) DeleteInstance(ctx context.Context, tenantID string) error {
 	return nil
 }
 
-// StopInstance removes the instance (OpenClaw operator doesn't support scaling to 0)
+// StopInstance tears down a tenant's instance. The OpenClaw operator does not
+// support scaling to zero, so this is equivalent to deletion.
 func (m *Manager) StopInstance(ctx context.Context, tenantID string) error {
 	return m.DeleteInstance(ctx, tenantID)
 }
 
-// StartInstance creates a new instance (OpenClaw operator doesn't support scaling from 0)
+// StartInstance is not currently supported — callers should use CreateInstance
+// with a gateway token instead.
 func (m *Manager) StartInstance(ctx context.Context, tenantID string) error {
-	// For simplicity, this would need a gateway token - this method may not be needed
-	// since we typically create instances with a token during provisioning
-	return fmt.Errorf("StartInstance not supported - use CreateInstance instead")
+	return fmt.Errorf("StartInstance not supported — use CreateInstance instead")
 }
-
