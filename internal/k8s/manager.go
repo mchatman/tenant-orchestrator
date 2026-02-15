@@ -137,6 +137,14 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						"gateway": map[string]interface{}{
 							"bind": "lan",
 							"mode": "local",
+							// Trust nginx ingress + k8s pod network so connections
+							// through the proxy are treated as local (required for
+							// dangerouslyDisableDeviceAuth to work).
+							"trustedProxies": []string{
+								"10.0.0.0/8",
+								"172.16.0.0/12",
+								"192.168.0.0/16",
+							},
 							"controlUi": map[string]interface{}{
 								"allowInsecureAuth":            true,
 								"dangerouslyDisableDeviceAuth": true,
