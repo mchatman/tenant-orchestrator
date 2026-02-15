@@ -138,8 +138,9 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 							"bind": "lan",
 							"mode": "local",
 							"controlUi": map[string]interface{}{
-								"allowInsecureAuth":              true,
-								"dangerouslyDisableDeviceAuth":   true,
+								"allowInsecureAuth":            true,
+								"dangerouslyDisableDeviceAuth": true,
+								"allowedOrigins":               []string{"https://dashboard.wareit.ai"},
 							},
 						},
 					},
