@@ -163,6 +163,11 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						},
 					},
 				},
+				"security": map[string]interface{}{
+					"networkPolicy": map[string]interface{}{
+						"allowedIngressNamespaces": []string{"ingress-nginx"},
+					},
+				},
 				"resources": map[string]interface{}{
 					"requests": map[string]interface{}{
 						"memory": "512Mi",
