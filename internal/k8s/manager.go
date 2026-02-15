@@ -197,10 +197,11 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 	return instanceName, nil
 }
 
-// InstanceInfo holds the name and status of a tenant's instance.
+// InstanceInfo holds the name, status, and gateway token of a tenant's instance.
 type InstanceInfo struct {
-	Name   string
-	Status string
+	Name         string
+	Status       string
+	GatewayToken string
 }
 
 // GetInstanceEndpoint returns the external endpoint for a tenant's instance
@@ -235,7 +236,19 @@ func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceIn
 		}
 	}
 
-	return &InstanceInfo{Name: name, Status: status}, nil
+	// Extract gateway token from env vars
+	var gatewayToken string
+	envVars, _, _ := unstructured.NestedSlice(instance.Object, "spec", "env")
+	for _, e := range envVars {
+		if envMap, ok := e.(map[string]interface{}); ok {
+			if envMap["name"] == "OPENCLAW_GATEWAY_TOKEN" {
+				gatewayToken, _ = envMap["value"].(string)
+				break
+			}
+		}
+	}
+
+	return &InstanceInfo{Name: name, Status: status, GatewayToken: gatewayToken}, nil
 }
 
 // GetInstanceStatus checks if an instance is running by tenant ID (deprecated: use GetInstance)

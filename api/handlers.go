@@ -21,8 +21,9 @@ func NewHandler(k8sManager *k8s.Manager) *Handler {
 }
 
 type InstanceResponse struct {
-	Endpoint string `json:"endpoint"`
-	Status   string `json:"status"`
+	Endpoint     string `json:"endpoint"`
+	Status       string `json:"status"`
+	GatewayToken string `json:"gateway_token,omitempty"`
 }
 
 type CreateInstanceRequest struct {
@@ -69,8 +70,9 @@ func (h *Handler) GetInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := InstanceResponse{
-		Endpoint: info.Name,
-		Status:   info.Status,
+		Endpoint:     info.Name,
+		Status:       info.Status,
+		GatewayToken: info.GatewayToken,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
