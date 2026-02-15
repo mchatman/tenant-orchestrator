@@ -103,6 +103,26 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 				},
 			},
 			"spec": map[string]interface{}{
+				"image": map[string]interface{}{
+					"repository": "ghcr.io/openclaw/openclaw",
+					"tag":        "latest",
+					"pullPolicy": "Always",
+					"pullSecrets": []map[string]interface{}{
+						{"name": "registry-wareit"},
+					},
+				},
+				"config": map[string]interface{}{
+					"raw": map[string]interface{}{
+						"gateway": map[string]interface{}{
+							"bind": "lan",
+							"mode": "local",
+							"controlUi": map[string]interface{}{
+								"allowInsecureAuth":              true,
+								"dangerouslyDisableDeviceAuth":   true,
+							},
+						},
+					},
+				},
 				"env": []map[string]interface{}{
 					{
 						"name":  "OPENCLAW_GATEWAY_TOKEN",
@@ -113,6 +133,36 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						"value": "production",
 					},
 				},
+				"networking": map[string]interface{}{
+					"ingress": map[string]interface{}{
+						"enabled":   true,
+						"className": "nginx",
+						"annotations": map[string]interface{}{
+							"cert-manager.io/cluster-issuer":                    "letsencrypt-prod",
+							"nginx.ingress.kubernetes.io/proxy-body-size":       "50m",
+							"nginx.ingress.kubernetes.io/proxy-read-timeout":    "3600",
+							"nginx.ingress.kubernetes.io/proxy-send-timeout":    "3600",
+						},
+						"hosts": []map[string]interface{}{
+							{
+								"host": fmt.Sprintf("%s.wareit.ai", instanceName),
+								"paths": []map[string]interface{}{
+									{"path": "/", "pathType": "Prefix"},
+								},
+							},
+						},
+						"tls": []map[string]interface{}{
+							{
+								"hosts":      []string{fmt.Sprintf("%s.wareit.ai", instanceName)},
+								"secretName": fmt.Sprintf("%s-tls", instanceName),
+							},
+						},
+						"security": map[string]interface{}{
+							"enableHSTS":  false,
+							"forceHTTPS": true,
+						},
+					},
+				},
 				"resources": map[string]interface{}{
 					"requests": map[string]interface{}{
 						"memory": "512Mi",
@@ -121,26 +171,6 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 					"limits": map[string]interface{}{
 						"memory": "1536Mi",
 						"cpu":    "1000m",
-					},
-				},
-				"probes": map[string]interface{}{
-					"startup": map[string]interface{}{
-						"initialDelaySeconds": 30,
-						"timeoutSeconds":      10,
-						"periodSeconds":       10,
-						"failureThreshold":    60, // 10 minutes total
-					},
-					"readiness": map[string]interface{}{
-						"initialDelaySeconds": 10,
-						"timeoutSeconds":      5,
-						"periodSeconds":       10,
-						"failureThreshold":    3,
-					},
-					"liveness": map[string]interface{}{
-						"initialDelaySeconds": 60,
-						"timeoutSeconds":      10,
-						"periodSeconds":       30,
-						"failureThreshold":    3,
 					},
 				},
 				"storage": map[string]interface{}{
