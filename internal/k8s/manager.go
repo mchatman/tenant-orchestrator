@@ -73,6 +73,27 @@ func getConfig() (*rest.Config, error) {
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }
 
+// buildEnvVars constructs the env var list for a new tenant instance.
+// It injects shared API keys from the orchestrator's own environment.
+func (m *Manager) buildEnvVars(gatewayToken string) []map[string]interface{} {
+	envs := []map[string]interface{}{
+		{"name": "OPENCLAW_GATEWAY_TOKEN", "value": gatewayToken},
+		{"name": "NODE_ENV", "value": "production"},
+	}
+
+	// Inject AI provider keys if configured
+	for _, key := range []string{
+		"ANTHROPIC_API_KEY",
+		"OPENAI_API_KEY",
+	} {
+		if val := os.Getenv(key); val != "" {
+			envs = append(envs, map[string]interface{}{"name": key, "value": val})
+		}
+	}
+
+	return envs
+}
+
 func (m *Manager) generateTenantInstanceName() (string, error) {
 	bytes := make([]byte, 4)
 	if _, err := rand.Read(bytes); err != nil {
@@ -123,16 +144,7 @@ func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken str
 						},
 					},
 				},
-				"env": []map[string]interface{}{
-					{
-						"name":  "OPENCLAW_GATEWAY_TOKEN",
-						"value": gatewayToken,
-					},
-					{
-						"name":  "NODE_ENV",
-						"value": "production",
-					},
-				},
+				"env": m.buildEnvVars(gatewayToken),
 				"networking": map[string]interface{}{
 					"ingress": map[string]interface{}{
 						"enabled":   true,
