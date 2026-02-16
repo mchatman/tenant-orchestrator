@@ -34,8 +34,6 @@ export PORT=8080                    # default: 8080
 | `POST` | `/tenants/{tenant-id}/instance` | Create an instance |
 | `GET` | `/tenants/{tenant-id}/instance` | Get instance status |
 | `DELETE` | `/tenants/{tenant-id}/instance` | Delete an instance |
-| `POST` | `/tenants/{tenant-id}/instance/start` | Start (not yet supported) |
-| `POST` | `/tenants/{tenant-id}/instance/stop` | Stop (deletes) an instance |
 
 `tenant-id` must be a valid UUID.
 

@@ -48,8 +48,6 @@ func main() {
 		r.Post("/", handler.CreateInstance)
 		r.Get("/", handler.GetInstance)
 		r.Delete("/", handler.DeleteInstance)
-		r.Post("/start", handler.StartInstance)
-		r.Post("/stop", handler.StopInstance)
 	})
 
 	srv := &http.Server{

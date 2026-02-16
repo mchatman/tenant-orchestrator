@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mchatman/tenant-orchestrator/internal/k8s"
@@ -46,6 +47,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // InstanceResponse is the standard JSON envelope returned for instance
 // operations.
 type InstanceResponse struct {
+	Name         string `json:"name"`
 	Endpoint     string `json:"endpoint"`
 	Status       string `json:"status"`
 	GatewayToken string `json:"gateway_token,omitempty"`
@@ -58,11 +60,14 @@ type CreateInstanceRequest struct {
 
 // ---------- route handlers ----------
 
+// uuidRe matches a standard UUID.
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
 // tenantID extracts and validates the tenant-id path parameter. On validation
 // failure it writes an error response and returns an empty string.
 func tenantID(w http.ResponseWriter, r *http.Request) string {
 	id := chi.URLParam(r, "tenant-id")
-	if err := k8s.ValidateTenantID(id); err != nil {
+	if !uuidRe.MatchString(id) {
 		writeError(w, http.StatusBadRequest, "invalid tenant ID: must be a valid UUID")
 		return ""
 	}
@@ -84,7 +89,7 @@ func (h *Handler) CreateInstance(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("CreateInstance: tenant=%s", id)
 
-	endpoint, err := h.k8sManager.CreateInstance(r.Context(), id, req.GatewayToken)
+	info, err := h.k8sManager.CreateInstance(r.Context(), id, req.GatewayToken)
 	if err != nil {
 		log.Printf("CreateInstance error: tenant=%s err=%v", id, err)
 		writeError(w, http.StatusInternalServerError, "failed to create instance")
@@ -92,8 +97,9 @@ func (h *Handler) CreateInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, InstanceResponse{
-		Endpoint: endpoint,
-		Status:   "creating",
+		Name:     info.Name,
+		Endpoint: info.Endpoint,
+		Status:   info.Status,
 	})
 }
 
@@ -120,6 +126,7 @@ func (h *Handler) GetInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, InstanceResponse{
+		Name:         info.Name,
 		Endpoint:     info.Endpoint,
 		Status:       info.Status,
 		GatewayToken: info.GatewayToken,
@@ -145,45 +152,7 @@ func (h *Handler) DeleteInstance(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// StartInstance handles POST /tenants/{tenant-id}/instance/start.
-func (h *Handler) StartInstance(w http.ResponseWriter, r *http.Request) {
-	id := tenantID(w, r)
-	if id == "" {
-		return
-	}
 
-	log.Printf("StartInstance: tenant=%s", id)
-
-	if err := h.k8sManager.StartInstance(r.Context(), id); err != nil {
-		log.Printf("StartInstance error: tenant=%s err=%v", id, err)
-		writeError(w, http.StatusNotImplemented, "start is not supported — use create instead")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, InstanceResponse{
-		Status: "starting",
-	})
-}
-
-// StopInstance handles POST /tenants/{tenant-id}/instance/stop.
-func (h *Handler) StopInstance(w http.ResponseWriter, r *http.Request) {
-	id := tenantID(w, r)
-	if id == "" {
-		return
-	}
-
-	log.Printf("StopInstance: tenant=%s", id)
-
-	if err := h.k8sManager.StopInstance(r.Context(), id); err != nil {
-		log.Printf("StopInstance error: tenant=%s err=%v", id, err)
-		writeError(w, http.StatusInternalServerError, "failed to stop instance")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, InstanceResponse{
-		Status: "stopping",
-	})
-}
 
 // ---------- helpers ----------
 

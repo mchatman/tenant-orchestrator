@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/mchatman/tenant-orchestrator/internal/config"
 
@@ -23,9 +22,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
-
-// uuidRe matches a standard UUID (v4 or otherwise).
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // Manager provides high-level operations on OpenClaw tenant instances inside a
 // single Kubernetes namespace.
@@ -82,14 +78,6 @@ func getConfig() (*rest.Config, error) {
 	// Fall back to kubeconfig file (for local development)
 	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
-}
-
-// ValidateTenantID returns an error if tenantID is not a valid UUID.
-func ValidateTenantID(tenantID string) error {
-	if !uuidRe.MatchString(tenantID) {
-		return fmt.Errorf("invalid tenant ID: must be a valid UUID")
-	}
-	return nil
 }
 
 // buildEnvVars constructs the env var list for a new tenant instance.
@@ -223,26 +211,25 @@ func (m *Manager) buildInstanceSpec(instanceName, tenantID, gatewayToken string)
 	}
 }
 
-// CreateInstance provisions a new OpenClaw instance for the given tenant and
-// returns its public endpoint URL.
-func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken string) (string, error) {
-	if err := ValidateTenantID(tenantID); err != nil {
-		return "", err
-	}
-
+// CreateInstance provisions a new OpenClaw instance for the given tenant.
+func (m *Manager) CreateInstance(ctx context.Context, tenantID, gatewayToken string) (*InstanceInfo, error) {
 	instanceName, err := generateTenantInstanceName()
 	if err != nil {
-		return "", fmt.Errorf("generating instance name: %v", err)
+		return nil, fmt.Errorf("generating instance name: %v", err)
 	}
 
 	instance := m.buildInstanceSpec(instanceName, tenantID, gatewayToken)
 
 	_, err = m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).Create(ctx, instance, metav1.CreateOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to create tenant instance: %v", err)
+		return nil, fmt.Errorf("failed to create tenant instance: %v", err)
 	}
 
-	return m.InstanceURL(instanceName), nil
+	return &InstanceInfo{
+		Name:     instanceName,
+		Endpoint: m.InstanceURL(instanceName),
+		Status:   "creating",
+	}, nil
 }
 
 // InstanceInfo holds metadata about a running tenant instance.
@@ -261,10 +248,6 @@ func (m *Manager) InstanceURL(instanceName string) string {
 // GetInstance finds a tenant's instance and returns its info, or nil if none
 // exists.
 func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceInfo, error) {
-	if err := ValidateTenantID(tenantID); err != nil {
-		return nil, err
-	}
-
 	list, err := m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("tenant=%s", tenantID),
 	})
@@ -312,10 +295,6 @@ func (m *Manager) GetInstance(ctx context.Context, tenantID string) (*InstanceIn
 
 // DeleteInstance deletes all instances belonging to the given tenant.
 func (m *Manager) DeleteInstance(ctx context.Context, tenantID string) error {
-	if err := ValidateTenantID(tenantID); err != nil {
-		return err
-	}
-
 	list, err := m.client.Resource(tenantGVR).Namespace(m.cfg.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("tenant=%s", tenantID),
 	})
@@ -334,14 +313,4 @@ func (m *Manager) DeleteInstance(ctx context.Context, tenantID string) error {
 	return nil
 }
 
-// StopInstance tears down a tenant's instance. The OpenClaw operator does not
-// support scaling to zero, so this is equivalent to deletion.
-func (m *Manager) StopInstance(ctx context.Context, tenantID string) error {
-	return m.DeleteInstance(ctx, tenantID)
-}
 
-// StartInstance is not currently supported — callers should use CreateInstance
-// with a gateway token instead.
-func (m *Manager) StartInstance(ctx context.Context, tenantID string) error {
-	return fmt.Errorf("StartInstance not supported — use CreateInstance instead")
-}
