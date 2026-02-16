@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/mchatman/tenant-orchestrator/api"
-	"github.com/mchatman/tenant-orchestrator/internal/config"
-	"github.com/mchatman/tenant-orchestrator/internal/k8s"
+	"github.com/mchatman/bottegeppetto/api"
+	"github.com/mchatman/bottegeppetto/internal/config"
+	"github.com/mchatman/bottegeppetto/internal/k8s"
 )
 
 func main() {
@@ -71,7 +71,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("starting tenant-orchestrator on :%s", cfg.Port)
+	log.Printf("starting bottegeppetto on :%s", cfg.Port)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server failed: %v", err)
 	}

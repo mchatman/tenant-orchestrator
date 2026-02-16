@@ -6,13 +6,13 @@ A lightweight service that provisions and manages per-tenant [OpenClaw](https://
 
 ```bash
 # Build
-go build -o tenant-orchestrator ./cmd
+go build -o bottegeppetto ./cmd
 
 # Run (requires a valid kubeconfig or in-cluster service account)
 export TENANT_NAMESPACE=tenants     # default: tenants
 export TENANT_DOMAIN=wareit.ai      # default: wareit.ai
 export PORT=8080                    # default: 8080
-./tenant-orchestrator
+./bottegeppetto
 ```
 
 ## Configuration
@@ -40,10 +40,10 @@ export PORT=8080                    # default: 8080
 ## Docker
 
 ```bash
-docker build -t tenant-orchestrator .
+docker build -t bottegeppetto .
 docker run -p 8080:8080 \
   -e KUBECONFIG_BASE64="$(base64 < kubeconfig-sa.yaml)" \
-  tenant-orchestrator
+  bottegeppetto
 ```
 
 ## Project Structure

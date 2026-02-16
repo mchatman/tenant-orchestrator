@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o tenant-orchestrator cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o bottegeppetto cmd/main.go
 
 FROM alpine:latest
 
@@ -18,8 +18,8 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/tenant-orchestrator .
+COPY --from=builder /app/bottegeppetto .
 
 EXPOSE 8080
 
-CMD ["./tenant-orchestrator"]
+CMD ["./bottegeppetto"]

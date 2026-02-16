@@ -1,4 +1,4 @@
-module github.com/mchatman/tenant-orchestrator
+module github.com/mchatman/bottegeppetto
 
 go 1.24.0
 

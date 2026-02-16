@@ -1,12 +1,12 @@
-name: tenant-orchestrator
+name: bottegeppetto
 region: nyc3
 
 services:
-- name: tenant-orchestrator
+- name: bottegeppetto
   git:
     branch: main
-    repo_clone_url: https://github.com/mchatman/tenant-orchestrator.git
-  run_command: ./tenant-orchestrator
+    repo_clone_url: https://github.com/mchatman/bottegeppetto.git
+  run_command: ./bottegeppetto
   dockerfile_path: Dockerfile
   instance_count: 1
   instance_size_slug: basic-xs
