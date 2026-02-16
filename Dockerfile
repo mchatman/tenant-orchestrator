@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -19,8 +19,6 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 COPY --from=builder /app/tenant-orchestrator .
-# Copy kubeconfig for service account authentication
-COPY kubeconfig-sa.yaml /root/.kube/config
 
 EXPOSE 8080
 
