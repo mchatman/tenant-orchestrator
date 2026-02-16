@@ -1,4 +1,4 @@
-module github.com/mchatman/bottegeppetto
+module github.com/mchatman/tenant-provisioner
 
 go 1.24.0
 

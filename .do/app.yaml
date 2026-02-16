@@ -1,12 +1,12 @@
-name: bottegeppetto
+name: tenant-provisioner
 region: nyc3
 
 services:
-- name: bottegeppetto
+- name: tenant-provisioner
   git:
     branch: main
-    repo_clone_url: https://github.com/mchatman/bottegeppetto.git
-  run_command: ./bottegeppetto
+    repo_clone_url: https://github.com/mchatman/tenant-provisioner.git
+  run_command: ./tenant-provisioner
   dockerfile_path: Dockerfile
   instance_count: 1
   instance_size_slug: basic-xs

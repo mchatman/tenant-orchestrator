@@ -1,4 +1,4 @@
-// Package api implements the HTTP handlers for the bottegeppetto
+// Package api implements the HTTP handlers for the tenant-provisioner
 // REST API.
 package api
 
@@ -11,7 +11,7 @@ import (
 	"regexp"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/mchatman/bottegeppetto/internal/k8s"
+	"github.com/mchatman/tenant-provisioner/internal/k8s"
 )
 
 // Handler groups the HTTP handlers and their shared dependencies.

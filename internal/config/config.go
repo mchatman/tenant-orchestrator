@@ -1,5 +1,5 @@
 // Package config centralises all environment-driven configuration for the
-// bottegeppetto service so that no package needs to read os.Getenv
+// tenant-provisioner service so that no package needs to read os.Getenv
 // directly.
 package config
 
