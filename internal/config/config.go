@@ -7,20 +7,18 @@ import "os"
 
 // Config holds all runtime configuration values.
 type Config struct {
-	Namespace      string // Kubernetes namespace for tenant instances
-	Domain         string // Public domain suffix (e.g. "wareit.ai")
-	InternalDomain string // Internal domain suffix (e.g. "internal.wareit.ai")
-	Port           string // HTTP listen port
+	Namespace string // Kubernetes namespace for tenant instances
+	Domain    string // Public domain suffix (e.g. "wareit.ai")
+	Port      string // HTTP listen port
 }
 
 // Load reads configuration from environment variables, falling back to
 // sensible defaults where a variable is unset or empty.
 func Load() *Config {
 	return &Config{
-		Namespace:      envOr("TENANT_NAMESPACE", "tenants"),
-		Domain:         envOr("TENANT_DOMAIN", "wareit.ai"),
-		InternalDomain: envOr("TENANT_INTERNAL_DOMAIN", "internal.wareit.ai"),
-		Port:           envOr("PORT", "8080"),
+		Namespace: envOr("TENANT_NAMESPACE", "tenants"),
+		Domain:    envOr("TENANT_DOMAIN", "wareit.ai"),
+		Port:      envOr("PORT", "8080"),
 	}
 }
 

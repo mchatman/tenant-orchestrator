@@ -125,7 +125,6 @@ func generateTenantInstanceName() (string, error) {
 // creation in the cluster.
 func (m *Manager) buildInstanceSpec(instanceName, tenantID, gatewayToken string) *unstructured.Unstructured {
 	domain := m.cfg.Domain
-	internalDomain := m.cfg.InternalDomain
 
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -181,12 +180,6 @@ func (m *Manager) buildInstanceSpec(instanceName, tenantID, gatewayToken string)
 						"hosts": []map[string]interface{}{
 							{
 								"host": fmt.Sprintf("%s.%s", instanceName, domain),
-								"paths": []map[string]interface{}{
-									{"path": "/", "pathType": "Prefix"},
-								},
-							},
-							{
-								"host": fmt.Sprintf("%s.%s", instanceName, internalDomain),
 								"paths": []map[string]interface{}{
 									{"path": "/", "pathType": "Prefix"},
 								},

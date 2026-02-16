@@ -21,7 +21,6 @@ export PORT=8080                    # default: 8080
 |---|---|---|
 | `TENANT_NAMESPACE` | `tenants` | Kubernetes namespace for tenant instances |
 | `TENANT_DOMAIN` | `wareit.ai` | Public domain suffix for instance URLs |
-| `TENANT_INTERNAL_DOMAIN` | `internal.wareit.ai` | Internal domain suffix |
 | `PORT` | `8080` | HTTP listen port |
 | `KUBECONFIG_BASE64` | — | Base64-encoded kubeconfig (for non-cluster deploys) |
 | `ANTHROPIC_API_KEY` | — | Injected into tenant instances |
