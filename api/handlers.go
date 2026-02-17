@@ -97,9 +97,10 @@ func (h *Handler) CreateInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, InstanceResponse{
-		Name:     info.Name,
-		Endpoint: info.Endpoint,
-		Status:   info.Status,
+		Name:         info.Name,
+		Endpoint:     info.Endpoint,
+		Status:       info.Status,
+		GatewayToken: req.GatewayToken,
 	})
 }
 
