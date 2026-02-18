@@ -36,6 +36,12 @@ var tenantGVR = schema.GroupVersionResource{
 	Resource: "openclawinstances",
 }
 
+var networkPolicyGVR = schema.GroupVersionResource{
+	Group:    "networking.k8s.io",
+	Version:  "v1",
+	Resource: "networkpolicies",
+}
+
 // NewManager creates a Manager that operates in the namespace specified by cfg.
 func NewManager(cfg *config.Config) (*Manager, error) {
 	restCfg, err := getConfig()
@@ -209,6 +215,63 @@ func (m *Manager) buildInstanceSpec(instanceName, tenantID, gatewayToken string)
 			},
 		},
 	}
+}
+
+// Bootstrap ensures namespace-level resources that must exist before any tenant
+// is provisioned are present and correctly configured. Safe to call on every
+// startup — it uses server-side apply so it is idempotent.
+func (m *Manager) Bootstrap(ctx context.Context) error {
+	// allow-bluefairy-proxy restricts ingress to openclaw pods only.
+	// podSelector MUST be scoped to app.kubernetes.io/name=openclaw so that
+	// ephemeral pods (e.g. cert-manager ACME HTTP-01 solvers) are not caught
+	// by the policy and blocked from receiving challenge traffic on port 8089.
+	policy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "networking.k8s.io/v1",
+			"kind":       "NetworkPolicy",
+			"metadata": map[string]interface{}{
+				"name":      "allow-bluefairy-proxy",
+				"namespace": m.cfg.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"podSelector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app.kubernetes.io/name": "openclaw",
+					},
+				},
+				"policyTypes": []interface{}{"Ingress"},
+				"ingress": []interface{}{
+					map[string]interface{}{
+						"from": []interface{}{
+							map[string]interface{}{
+								"namespaceSelector": map[string]interface{}{
+									"matchLabels": map[string]interface{}{
+										"kubernetes.io/metadata.name": "bluefairy",
+									},
+								},
+							},
+						},
+						"ports": []interface{}{
+							map[string]interface{}{"port": int64(18789), "protocol": "TCP"},
+							map[string]interface{}{"port": int64(18793), "protocol": "TCP"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := m.client.Resource(networkPolicyGVR).Namespace(m.cfg.Namespace).Apply(
+		ctx,
+		"allow-bluefairy-proxy",
+		policy,
+		metav1.ApplyOptions{FieldManager: "tenant-provisioner", Force: true},
+	)
+	if err != nil {
+		return fmt.Errorf("bootstrap allow-bluefairy-proxy: %w", err)
+	}
+
+	return nil
 }
 
 // CreateInstance provisions a new OpenClaw instance for the given tenant.

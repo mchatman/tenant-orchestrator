@@ -28,6 +28,11 @@ func main() {
 		log.Fatalf("Failed to initialize K8s manager: %v", err)
 	}
 
+	// Ensure namespace-level resources are correctly configured.
+	if err := k8sManager.Bootstrap(context.Background()); err != nil {
+		log.Fatalf("Bootstrap failed: %v", err)
+	}
+
 	// Initialize API handler
 	handler := api.NewHandler(k8sManager)
 
