@@ -168,6 +168,8 @@ func (m *Manager) buildInstanceSpec(instanceName, tenantID, gatewayToken string)
 							"nginx.ingress.kubernetes.io/proxy-body-size":    "50m",
 							"nginx.ingress.kubernetes.io/proxy-read-timeout": "3600",
 							"nginx.ingress.kubernetes.io/proxy-send-timeout": "3600",
+							"nginx.ingress.kubernetes.io/proxy-http-version": "1.1",
+							"nginx.ingress.kubernetes.io/upstream-hash-by":   "$binary_remote_addr",
 							"nginx.ingress.kubernetes.io/ssl-redirect":       "false",
 							"nginx.ingress.kubernetes.io/force-ssl-redirect": "false",
 						},
